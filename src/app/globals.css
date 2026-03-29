@@ -1,0 +1,176 @@
+body {
+  font-family: var(--font-manrope), sans-serif;
+}
+
+.brand strong,
+.brand h1,
+.section-heading h2,
+.section-heading h3,
+.page-intro h1,
+.hero-panel h1,
+.assistant-header h2,
+.offer-card h2,
+.status-card h2,
+.summary-card h2,
+.profile-summary h2,
+.glass-subcard h3,
+.history-item h3 {
+  font-family: var(--font-space-grotesk), sans-serif;
+}
+
+.topnav a,
+.tab-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.button:disabled {
+  opacity: 0.7;
+  cursor: wait;
+  transform: none;
+}
+
+.assistant-page-screen {
+  min-height: calc(100vh - 158px);
+  overflow: hidden;
+}
+
+.assistant-page-screen .assistant-workspace {
+  height: 100%;
+}
+
+.prompt-cluster-compact {
+  margin-bottom: 12px;
+}
+
+.micro-chip.is-active {
+  color: #f3f7ff;
+  background: linear-gradient(135deg, var(--accent), var(--warm));
+}
+
+.results-panel {
+  display: grid;
+  gap: 20px;
+}
+
+.empty-panel {
+  padding: 32px;
+}
+
+.empty-panel h1 {
+  margin: 0 0 10px;
+  font-family: var(--font-space-grotesk), sans-serif;
+  font-size: clamp(2rem, 3vw, 3rem);
+}
+
+.theme-option strong,
+.theme-option small {
+  text-align: left;
+}
+
+.tab-link {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.history-button {
+  width: 100%;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+}
+
+.history-button.is-selected {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+.admin-auth-bar {
+  display: grid;
+  gap: 16px;
+  align-items: end;
+  margin-bottom: 24px;
+}
+
+.admin-token-field {
+  display: grid;
+  gap: 8px;
+}
+
+.admin-token-field input,
+.admin-grid input,
+.admin-grid select,
+.admin-grid textarea {
+  width: 100%;
+}
+
+.admin-layout,
+.admin-grid {
+  display: grid;
+  gap: 24px;
+}
+
+.saved-addresses,
+.payment-method-grid {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.payment-choice,
+.address-option {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  cursor: pointer;
+}
+
+.payment-choice input,
+.address-option input {
+  margin-top: 4px;
+}
+
+.payment-choice span,
+.address-option span {
+  display: grid;
+  gap: 4px;
+}
+
+.payment-choice small,
+.address-option small {
+  color: var(--muted);
+}
+
+.payment-choice.is-selected,
+.address-option.is-selected {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+.admin-list,
+.admin-detail {
+  align-self: start;
+}
+
+@media (min-width: 980px) {
+  .admin-auth-bar {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .admin-layout {
+    grid-template-columns: minmax(280px, 0.9fr) minmax(0, 1.4fr);
+  }
+
+  .admin-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .assistant-page-screen {
+    min-height: auto;
+    overflow: visible;
+  }
+}
