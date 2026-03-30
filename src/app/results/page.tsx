@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSearchParams } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
@@ -136,6 +137,20 @@ function ResultsPageContent() {
             ) : null}
             <span className="tag">Ranking: {rankingConfig[effectiveRankingMode].label}</span>
             {backendSession ? <span className="tag">Origin: {backendSession.channel}</span> : null}
+          </div>
+          <div className="cta-row">
+            <Link className="button button-secondary" href="/assistant">
+              Refine in assistant
+            </Link>
+            {offers[0] ? (
+              <button
+                className="button button-ghost"
+                type="button"
+                onClick={() => handleSelectOffer(offers[0].id)}
+              >
+                Checkout top offer
+              </button>
+            ) : null}
           </div>
         </section>
 

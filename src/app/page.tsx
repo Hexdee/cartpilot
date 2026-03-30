@@ -19,9 +19,6 @@ export default function HomePage() {
             <Link className='button button-primary' href='/assistant'>
               Open assistant workspace
             </Link>
-            <Link className='button button-ghost' href='/profile'>
-              Preview profile hub
-            </Link>
           </div>
 
           <div className='metrics-grid'>

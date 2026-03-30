@@ -6,9 +6,6 @@ import { usePathname } from "next/navigation";
 const routes = [
   { href: "/", label: "Home" },
   { href: "/assistant", label: "Assistant" },
-  { href: "/results", label: "Results" },
-  { href: "/checkout", label: "Checkout" },
-  { href: "/tracking", label: "Tracking" },
   { href: "/profile", label: "Profile" },
   { href: "/admin/orders", label: "Admin" },
 ];
@@ -19,7 +16,9 @@ export function TopNav() {
   return (
     <nav className="topnav" aria-label="Primary">
       {routes.map((route) => {
-        const isActive = pathname === route.href;
+        const isActive = route.href === "/admin/orders"
+          ? pathname.startsWith("/admin")
+          : pathname === route.href;
 
         return (
           <Link

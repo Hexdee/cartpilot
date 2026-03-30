@@ -1,69 +1,90 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import Link from "next/link";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { backendApi, isBackendConfigured } from "@/lib/api";
 import {
   assistantPromptSuggestions,
-  getProductEntry,
+  formatCurrency,
+  getOffersForIntent,
+  getRecommendation,
   rankingConfig,
 } from "@/lib/catalog";
+import { getRankedOffers } from "@/lib/backend-presenters";
 import { getOrCreateWebSessionId } from "@/lib/web-session";
-import { ProductKey, RankingMode } from "@/lib/types";
+import { RankedOffer, RankingMode } from "@/lib/types";
 import { useAppStore } from "@/providers/app-store";
 
-function buildAssistantMessages(query: string, rankingMode: RankingMode) {
-  const product = getProductEntry(query ? getProductEntryKey(query) : "sony_wh1000xm5");
-  const rankingLabel = rankingConfig[rankingMode].label.toLowerCase();
+type ChatMessage = {
+  id: string;
+  role: "assistant" | "user";
+  text: string;
+};
 
-  return [
-    {
-      role: "assistant",
-      text: "I can compare offers by total price, rating, or fastest delivery across the stores you support.",
-    },
-    {
-      role: "user",
-      text: query,
-    },
-    {
-      role: "assistant",
-      text: `Understood. I’ll search for ${product.shortName} and prioritize ${rankingLabel} before I rank the shortlist.`,
-    },
-    {
-      role: "assistant",
-      text: product.followUp,
-    },
-  ];
-}
+type AssistantPreview = {
+  source: "backend" | "local";
+  query: string;
+  summary: string;
+  explanation?: string;
+  searchSessionId?: string;
+  resultsHref: string;
+  checkoutHref?: string;
+  offers: RankedOffer[];
+};
 
-function getProductEntryKey(prompt: string): ProductKey {
-  const lower = prompt.toLowerCase();
+const welcomeMessage: ChatMessage = {
+  id: "welcome",
+  role: "assistant",
+  text:
+    "Tell me what you want to buy and what matters most, like best deal, fastest delivery, preferred store, brand, or budget. I’ll return a ranked shortlist and you can continue to results or checkout from here.",
+};
 
-  if (lower.includes("ipad")) return "ipad_10th_gen";
-  if (lower.includes("air fryer")) return "air_fryer";
-  if (lower.includes("running shoes") || lower.includes("size 43")) return "running_shoes";
-  if (lower.includes("office chair")) return "office_chair";
-  if (lower.includes("controller")) return "ps5_controller";
-  if (lower.includes("blender")) return "portable_blender";
-
-  return "sony_wh1000xm5";
+function createMessage(role: ChatMessage["role"], text: string): ChatMessage {
+  return {
+    id: `${role}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
+    role,
+    text,
+  };
 }
 
 export default function AssistantPage() {
   const router = useRouter();
-  const { state, submitSearch } = useAppStore();
+  const chatFeedRef = useRef<HTMLDivElement | null>(null);
+  const { state, submitSearch, selectOffer } = useAppStore();
   const [prompt, setPrompt] = useState(state.currentSearch.query);
   const [rankingMode, setRankingMode] = useState<RankingMode>(state.currentSearch.rankingMode);
+  const [messages, setMessages] = useState<ChatMessage[]>([welcomeMessage]);
+  const [preview, setPreview] = useState<AssistantPreview | null>(null);
   const [isPending, setIsPending] = useState(false);
+  const [isChoosingOffer, setIsChoosingOffer] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [webSessionId, setWebSessionId] = useState("");
-  const messages = buildAssistantMessages(prompt || state.currentSearch.query, rankingMode);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     setWebSessionId(getOrCreateWebSessionId());
   }, []);
+
+  useEffect(() => {
+    const feed = chatFeedRef.current;
+    if (!feed) return;
+    feed.scrollTo({
+      top: feed.scrollHeight,
+      behavior: "smooth",
+    });
+  }, [messages, preview]);
+
+  const contextualActions = useMemo(() => {
+    if (!preview) return null;
+
+    return {
+      resultsHref: preview.resultsHref,
+      checkoutHref: preview.checkoutHref,
+      hasOffers: preview.offers.length > 0,
+    };
+  }, [preview]);
 
   function toRelativeUrl(url: string) {
     try {
@@ -80,6 +101,8 @@ export default function AssistantPage() {
     const resolvedPrompt = prompt.trim();
     if (!resolvedPrompt) return;
 
+    const userMessage = createMessage("user", resolvedPrompt);
+    setMessages((current) => [...current, userMessage]);
     setIsPending(true);
     setErrorMessage(null);
 
@@ -89,16 +112,85 @@ export default function AssistantPage() {
           message: resolvedPrompt,
           displayName: state.profile.fullName,
         });
-        router.push(toRelativeUrl(response.reply.webLinks.results));
+
+        const assistantText = [
+          response.reply.summary,
+          response.reply.clarifyingQuestion,
+        ]
+          .filter(Boolean)
+          .join("\n\n");
+
+        setMessages((current) => [...current, createMessage("assistant", assistantText)]);
+        setPreview({
+          source: "backend",
+          query: response.searchSession.intent.query,
+          summary: response.reply.summary,
+          explanation: response.searchSession.explanation,
+          searchSessionId: response.searchSession.id,
+          resultsHref: toRelativeUrl(response.reply.webLinks.results),
+          checkoutHref: response.reply.webLinks.checkout
+            ? toRelativeUrl(response.reply.webLinks.checkout)
+            : undefined,
+          offers: getRankedOffers(response.searchSession).slice(0, 3),
+        });
+      } else {
+        const intent = submitSearch(resolvedPrompt, rankingMode);
+        const offers = getOffersForIntent(intent);
+        const summary = getRecommendation(intent, offers);
+
+        setMessages((current) => [...current, createMessage("assistant", summary)]);
+        setPreview({
+          source: "local",
+          query: intent.query,
+          summary,
+          explanation: summary,
+          resultsHref: "/results",
+          offers: offers.slice(0, 3),
+          checkoutHref: offers[0] ? "/checkout" : undefined,
+        });
+      }
+
+      setPrompt("");
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Unable to send your request right now.");
+      setMessages((current) => [
+        ...current,
+        createMessage(
+          "assistant",
+          "I ran into a problem while preparing the shortlist. Please try again in a moment.",
+        ),
+      ]);
+    } finally {
+      setIsPending(false);
+    }
+  }
+
+  async function handleChooseOffer(offerId: string) {
+    if (!preview) return;
+
+    setIsChoosingOffer(true);
+    setErrorMessage(null);
+
+    try {
+      if (preview.source === "backend" && preview.searchSessionId && isBackendConfigured()) {
+        const response = await backendApi.selectOffer(preview.searchSessionId, offerId);
+        const checkoutUrl = response.webLinks?.checkout;
+
+        if (checkoutUrl) {
+          router.push(toRelativeUrl(checkoutUrl));
+          return;
+        }
+
+        router.push(`/checkout?checkoutSession=${response.checkoutSession.id}`);
         return;
       }
 
-      submitSearch(resolvedPrompt, rankingMode);
-      router.push("/results");
+      selectOffer(offerId);
+      router.push("/checkout");
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Unable to send your request right now.");
+      setErrorMessage(error instanceof Error ? error.message : "Unable to continue with this offer right now.");
     } finally {
-      setIsPending(false);
+      setIsChoosingOffer(false);
     }
   }
 
@@ -109,15 +201,17 @@ export default function AssistantPage() {
           <div className="assistant-header">
             <div>
               <p className="assistant-kicker">Assistant Session</p>
-              <h2>Nexa is ready to shop</h2>
+              <h2>CartPilot is ready to shop</h2>
             </div>
-            <span className="live-badge">{isPending ? "Searching..." : "Live session"}</span>
+            <span className="live-badge">
+              {isPending || isChoosingOffer ? "Working..." : "Live session"}
+            </span>
           </div>
 
-          <div className="chat-feed assistant-chat-feed">
-            {messages.map((message, index) => (
+          <div className="chat-feed assistant-chat-feed" ref={chatFeedRef}>
+            {messages.map((message) => (
               <article
-                key={`${message.role}-${index}`}
+                key={message.id}
                 className={`message ${message.role === "assistant" ? "assistant-message" : "user-message"}`}
               >
                 <span className="avatar">{message.role === "assistant" ? "AI" : "You"}</span>
@@ -126,6 +220,77 @@ export default function AssistantPage() {
                 </div>
               </article>
             ))}
+
+            {preview ? (
+              <section className="assistant-result-panel">
+                <div className="assistant-result-header">
+                  <div>
+                    <p className="assistant-kicker">Current shortlist</p>
+                    <h3>{preview.query}</h3>
+                  </div>
+                  <span className="tag">{rankingConfig[rankingMode].label}</span>
+                </div>
+
+                <p className="assistant-result-copy">
+                  {preview.explanation ?? preview.summary}
+                </p>
+
+                {preview.offers.length ? (
+                  <div className="assistant-result-list">
+                    {preview.offers.map((offer, index) => (
+                      <article className="assistant-result-item" key={offer.id}>
+                        <div className="assistant-result-meta">
+                          <span className="assistant-result-rank">#{index + 1}</span>
+                          <div>
+                            <strong>{offer.merchant}</strong>
+                            <h4>{offer.title}</h4>
+                          </div>
+                        </div>
+                        <div className="assistant-result-stats">
+                          <span>{formatCurrency(offer.totalCost)}</span>
+                          <span>{offer.etaLabel}</span>
+                          <span>{offer.rating.toFixed(1)}★</span>
+                        </div>
+                        <p>{offer.summary}</p>
+                        <div className="assistant-result-actions">
+                          <button
+                            className="button button-primary"
+                            type="button"
+                            onClick={() => handleChooseOffer(offer.id)}
+                            disabled={isChoosingOffer}
+                          >
+                            {isChoosingOffer ? "Opening" : "Choose this offer"}
+                          </button>
+                          <a
+                            className="button button-ghost"
+                            href={offer.sourceUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            View merchant
+                          </a>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="assistant-result-copy">
+                    No confident matches yet. Try adding a clearer model, brand, size, or budget.
+                  </p>
+                )}
+
+                <div className="assistant-journey-actions">
+                  <Link className="button button-secondary" href={preview.resultsHref}>
+                    Open full results
+                  </Link>
+                  {contextualActions?.checkoutHref ? (
+                    <Link className="button button-ghost" href={contextualActions.checkoutHref}>
+                      Checkout top offer
+                    </Link>
+                  ) : null}
+                </div>
+              </section>
+            ) : null}
           </div>
 
           <div className="prompt-cluster prompt-cluster-compact">
@@ -170,7 +335,7 @@ export default function AssistantPage() {
                 rows={3}
                 value={prompt}
                 onChange={(event) => setPrompt(event.target.value)}
-                placeholder="Tell CartPilot AI what you want, budget, preferred stores, or delivery speed..."
+                placeholder="Tell CartPilot what you want, your budget, preferred store, or delivery speed..."
               ></textarea>
               <button className="button button-primary send-button" type="submit" disabled={isPending}>
                 {isPending ? "Searching" : "Send"}

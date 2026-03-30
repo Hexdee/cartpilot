@@ -134,6 +134,14 @@ function TrackingPageContent() {
           <p className="lead">
             Created on {formatDateLabel(order.createdAt)}. CartPilot AI is keeping the full purchase timeline visible while the team completes the merchant-side order flow.
           </p>
+          <div className="cta-row">
+            <Link className="button button-secondary" href="/assistant">
+              Continue shopping
+            </Link>
+            <Link className="button button-ghost" href="/profile">
+              View profile hub
+            </Link>
+          </div>
         </section>
 
         <section className="tracking-layout">

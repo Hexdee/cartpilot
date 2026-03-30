@@ -55,6 +55,14 @@ export const rankingConfig: Record<
 };
 
 export const productCatalog: Record<ProductKey, ProductCatalogEntry> = {
+  custom: {
+    key: "custom",
+    displayName: "requested product",
+    shortName: "Requested product",
+    aliases: [],
+    followUp: "Tell me the brand, model, budget, or delivery preference if you want a tighter shortlist.",
+    relatedSuggestions: [],
+  },
   sony_wh1000xm5: {
     key: "sony_wh1000xm5",
     displayName: "Sony WH-1000XM5 headphones",
@@ -485,7 +493,7 @@ export function detectProductKey(prompt: string): ProductKey {
     }
   }
 
-  return "sony_wh1000xm5";
+  return "custom";
 }
 
 export function buildSearchIntent(prompt: string, rankingMode?: RankingMode): SearchIntent {
@@ -521,7 +529,7 @@ function getRankingScore(offer: RankedOffer, rankingMode: RankingMode): number {
 
 export function rankMerchantOffers(intent: SearchIntent, merchantOffers: MerchantOffer[]): RankedOffer[] {
   const matchingOffers = merchantOffers
-    .filter((offer) => offer.productKey === intent.productKey)
+    .filter((offer) => intent.productKey === "custom" || offer.productKey === intent.productKey)
     .filter((offer) => !intent.color || !offer.color || offer.color === intent.color)
     .map((offer) => {
       const totalCost = offer.price + offer.shippingCost;
@@ -603,7 +611,7 @@ export function getRecommendation(intent: SearchIntent, rankedOffers: RankedOffe
 
 export function getSearchTitle(intent: SearchIntent): string {
   const product = productCatalog[intent.productKey];
-  const parts = [product.shortName];
+  const parts = [intent.productKey === "custom" ? intent.query : product.shortName];
 
   if (intent.color) parts.push(`in ${intent.color}`);
   if (intent.budget) parts.push(`under ${formatCurrency(intent.budget)}`);
@@ -613,12 +621,13 @@ export function getSearchTitle(intent: SearchIntent): string {
 }
 
 export function getSearchLead(intent: SearchIntent): string {
-  const product = productCatalog[intent.productKey];
-  return `Nexa searched supported merchants for ${product.displayName}, normalized duplicate listings, and re-ranked results using ${rankingConfig[intent.rankingMode].label.toLowerCase()} as the primary signal.`;
+  const productLabel =
+    intent.productKey === "custom" ? `"${intent.query}"` : productCatalog[intent.productKey].displayName;
+  return `CartPilot searched supported merchants for ${productLabel}, normalized duplicate listings, and re-ranked results using ${rankingConfig[intent.rankingMode].label.toLowerCase()} as the primary signal.`;
 }
 
 export function getRelatedSuggestions(productKey: ProductKey): ProductSuggestion[] {
-  return productCatalog[productKey].relatedSuggestions;
+  return productCatalog[productKey]?.relatedSuggestions ?? [];
 }
 
 export function getDefaultSearchIntent(): SearchIntent {
@@ -691,5 +700,5 @@ export function calculatePlatformFee(totalCost: number): number {
 }
 
 export function getProductEntry(productKey: ProductKey): ProductCatalogEntry {
-  return productCatalog[productKey];
+  return productCatalog[productKey] ?? productCatalog.custom;
 }

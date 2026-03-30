@@ -22,6 +22,7 @@ export type OrderStatus =
   | "refunded";
 
 export type ProductKey =
+  | "custom"
   | "sony_wh1000xm5"
   | "ipad_10th_gen"
   | "air_fryer"

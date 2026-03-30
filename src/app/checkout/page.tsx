@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, Suspense, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSearchParams } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
@@ -233,6 +234,14 @@ function CheckoutPageContent() {
             You pay CartPilot AI once. The platform then places the merchant order
             on your behalf and keeps the order timeline visible inside the app.
           </p>
+          <div className="cta-row">
+            <Link className="button button-secondary" href={backendSearchSession ? `/results?searchSession=${backendSearchSession.id}` : "/results"}>
+              Back to results
+            </Link>
+            <Link className="button button-ghost" href="/assistant">
+              Ask assistant again
+            </Link>
+          </div>
         </section>
 
         <section className="checkout-layout">
