@@ -267,6 +267,7 @@ button {
   height: 180px;
   border-radius: 50%;
   background: radial-gradient(circle, rgba(47, 91, 234, 0.24), transparent 72%);
+  pointer-events: none;
 }
 
 .eyebrow,

@@ -7,7 +7,6 @@ const routes = [
   { href: "/", label: "Home" },
   { href: "/assistant", label: "Assistant" },
   { href: "/profile", label: "Profile" },
-  { href: "/admin/orders", label: "Admin" },
 ];
 
 export function TopNav() {
@@ -16,9 +15,7 @@ export function TopNav() {
   return (
     <nav className="topnav" aria-label="Primary">
       {routes.map((route) => {
-        const isActive = route.href === "/admin/orders"
-          ? pathname.startsWith("/admin")
-          : pathname === route.href;
+        const isActive = pathname === route.href;
 
         return (
           <Link
