@@ -32,12 +32,14 @@ body {
 }
 
 .assistant-page-screen {
-  min-height: calc(100vh - 158px);
+  height: calc(100dvh - 158px);
+  min-height: calc(100dvh - 158px);
   overflow: hidden;
 }
 
 .assistant-page-screen .assistant-workspace {
   height: 100%;
+  min-height: 0;
 }
 
 .prompt-cluster-compact {
@@ -253,11 +255,6 @@ body {
 }
 
 @media (max-width: 760px) {
-  .assistant-page-screen {
-    min-height: auto;
-    overflow: visible;
-  }
-
   .assistant-result-header {
     flex-direction: column;
   }

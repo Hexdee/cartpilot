@@ -133,6 +133,9 @@ button {
   width: min(calc(100% - 32px), var(--max-width));
   margin: 0 auto;
   padding: 24px 0 40px;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
 }
 
 .topbar {
@@ -226,6 +229,7 @@ button {
 .page {
   display: grid;
   gap: 24px;
+  min-height: 0;
 }
 
 .home-page {
