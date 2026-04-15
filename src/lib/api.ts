@@ -131,7 +131,7 @@ export const backendApi = {
   async sendConversationMessage(
     channel: ChannelType,
     sessionId: string,
-    payload: { message: string; displayName?: string },
+    payload: { message: string; displayName?: string; rankingMode?: RankingMode },
   ) {
     return fetchJson<{
       conversationSession: {
