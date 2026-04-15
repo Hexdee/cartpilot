@@ -8,8 +8,6 @@ import { backendApi, isBackendConfigured } from "@/lib/api";
 import {
   assistantPromptSuggestions,
   formatCurrency,
-  getOffersForIntent,
-  getRecommendation,
   rankingConfig,
 } from "@/lib/catalog";
 import { getRankedOffers } from "@/lib/backend-presenters";
@@ -24,7 +22,7 @@ type ChatMessage = {
 };
 
 type AssistantPreview = {
-  source: "backend" | "local";
+  source: "backend";
   query: string;
   summary: string;
   explanation?: string;
@@ -52,7 +50,7 @@ function createMessage(role: ChatMessage["role"], text: string): ChatMessage {
 export default function AssistantPage() {
   const router = useRouter();
   const chatFeedRef = useRef<HTMLDivElement | null>(null);
-  const { state, submitSearch, selectOffer } = useAppStore();
+  const { state } = useAppStore();
   const [prompt, setPrompt] = useState(state.currentSearch.query);
   const [rankingMode, setRankingMode] = useState<RankingMode>(state.currentSearch.rankingMode);
   const [messages, setMessages] = useState<ChatMessage[]>([welcomeMessage]);
@@ -107,48 +105,38 @@ export default function AssistantPage() {
     setErrorMessage(null);
 
     try {
-      if (isBackendConfigured() && webSessionId) {
-        const response = await backendApi.sendConversationMessage("web", webSessionId, {
-          message: resolvedPrompt,
-          displayName: state.profile.fullName,
-        });
-
-        const assistantText = [
-          response.reply.summary,
-          response.reply.clarifyingQuestion,
-        ]
-          .filter(Boolean)
-          .join("\n\n");
-
-        setMessages((current) => [...current, createMessage("assistant", assistantText)]);
-        setPreview({
-          source: "backend",
-          query: response.searchSession.intent.query,
-          summary: response.reply.summary,
-          explanation: response.searchSession.explanation,
-          searchSessionId: response.searchSession.id,
-          resultsHref: toRelativeUrl(response.reply.webLinks.results),
-          checkoutHref: response.reply.webLinks.checkout
-            ? toRelativeUrl(response.reply.webLinks.checkout)
-            : undefined,
-          offers: getRankedOffers(response.searchSession).slice(0, 3),
-        });
-      } else {
-        const intent = submitSearch(resolvedPrompt, rankingMode);
-        const offers = getOffersForIntent(intent);
-        const summary = getRecommendation(intent, offers);
-
-        setMessages((current) => [...current, createMessage("assistant", summary)]);
-        setPreview({
-          source: "local",
-          query: intent.query,
-          summary,
-          explanation: summary,
-          resultsHref: "/results",
-          offers: offers.slice(0, 3),
-          checkoutHref: offers[0] ? "/checkout" : undefined,
-        });
+      if (!isBackendConfigured() || !webSessionId) {
+        throw new Error(
+          "Live search is disabled. Set NEXT_PUBLIC_API_BASE_URL to your backend URL.",
+        );
       }
+
+      const response = await backendApi.sendConversationMessage("web", webSessionId, {
+        message: resolvedPrompt,
+        displayName: state.profile.fullName,
+        rankingMode,
+      });
+
+      const assistantText = [
+        response.reply.summary,
+        response.reply.clarifyingQuestion,
+      ]
+        .filter(Boolean)
+        .join("\n\n");
+
+      setMessages((current) => [...current, createMessage("assistant", assistantText)]);
+      setPreview({
+        source: "backend",
+        query: response.searchSession.intent.query,
+        summary: response.reply.summary,
+        explanation: response.searchSession.explanation,
+        searchSessionId: response.searchSession.id,
+        resultsHref: toRelativeUrl(response.reply.webLinks.results),
+        checkoutHref: response.reply.webLinks.checkout
+          ? toRelativeUrl(response.reply.webLinks.checkout)
+          : undefined,
+        offers: getRankedOffers(response.searchSession).slice(0, 3),
+      });
 
       setPrompt("");
     } catch (error) {
@@ -172,21 +160,21 @@ export default function AssistantPage() {
     setErrorMessage(null);
 
     try {
-      if (preview.source === "backend" && preview.searchSessionId && isBackendConfigured()) {
-        const response = await backendApi.selectOffer(preview.searchSessionId, offerId);
-        const checkoutUrl = response.webLinks?.checkout;
+      if (!preview.searchSessionId || !isBackendConfigured()) {
+        throw new Error(
+          "Live checkout is unavailable. Make sure NEXT_PUBLIC_API_BASE_URL is configured.",
+        );
+      }
 
-        if (checkoutUrl) {
-          router.push(toRelativeUrl(checkoutUrl));
-          return;
-        }
+      const response = await backendApi.selectOffer(preview.searchSessionId, offerId);
+      const checkoutUrl = response.webLinks?.checkout;
 
-        router.push(`/checkout?checkoutSession=${response.checkoutSession.id}`);
+      if (checkoutUrl) {
+        router.push(toRelativeUrl(checkoutUrl));
         return;
       }
 
-      selectOffer(offerId);
-      router.push("/checkout");
+      router.push(`/checkout?checkoutSession=${response.checkoutSession.id}`);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Unable to continue with this offer right now.");
     } finally {
@@ -331,7 +319,6 @@ export default function AssistantPage() {
             <div className="composer-layout">
               <textarea
                 id="assistantPrompt"
-                name="prompt"
                 rows={3}
                 value={prompt}
                 onChange={(event) => setPrompt(event.target.value)}
