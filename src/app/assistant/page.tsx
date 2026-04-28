@@ -35,8 +35,7 @@ type AssistantPreview = {
 const welcomeMessage: ChatMessage = {
   id: "welcome",
   role: "assistant",
-  text:
-    "Tell me what you want to buy and what matters most, like best deal, fastest delivery, preferred store, brand, or budget. I’ll return a ranked shortlist and you can continue to results or checkout from here.",
+  text: "Tell me what you want to buy and what matters most, like best deal, fastest delivery, preferred store, brand, or budget. I’ll return a ranked shortlist and you can continue to results or checkout from here.",
 };
 
 function createMessage(role: ChatMessage["role"], text: string): ChatMessage {
@@ -52,13 +51,38 @@ export default function AssistantPage() {
   const chatFeedRef = useRef<HTMLDivElement | null>(null);
   const { state } = useAppStore();
   const [prompt, setPrompt] = useState(state.currentSearch.query);
-  const [rankingMode, setRankingMode] = useState<RankingMode>(state.currentSearch.rankingMode);
+  const [rankingMode, setRankingMode] = useState<RankingMode>(
+    state.currentSearch.rankingMode,
+  );
   const [messages, setMessages] = useState<ChatMessage[]>([welcomeMessage]);
   const [preview, setPreview] = useState<AssistantPreview | null>(null);
   const [isPending, setIsPending] = useState(false);
   const [isChoosingOffer, setIsChoosingOffer] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [webSessionId, setWebSessionId] = useState("");
+  const [hiddenMerchants, setHiddenMerchants] = useState<string[]>([]);
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (isPending) {
+      setElapsed(0);
+      interval = setInterval(() => {
+        setElapsed((prev) => prev + 1);
+      }, 1000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isPending]);
+
+  const formatElapsed = (s: number) => {
+    const mins = Math.floor(s / 60);
+    const secs = s % 60;
+    const padSecs = secs.toString().padStart(2, '0');
+    if (mins === 0) return `${secs} secs`;
+    return `${mins} mins ${padSecs} secs`;
+  };
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -84,6 +108,24 @@ export default function AssistantPage() {
     };
   }, [preview]);
 
+  const availableMerchants = useMemo(() => {
+    if (!preview) return [];
+    return Array.from(new Set(preview.offers.map((o) => o.merchant))).sort();
+  }, [preview]);
+
+  const filteredOffers = useMemo(() => {
+    if (!preview) return [];
+    return preview.offers.filter((o) => !hiddenMerchants.includes(o.merchant));
+  }, [preview, hiddenMerchants]);
+
+  const toggleMerchant = (merchant: string) => {
+    setHiddenMerchants((current) =>
+      current.includes(merchant)
+        ? current.filter((m) => m !== merchant)
+        : [...current, merchant]
+    );
+  };
+
   function toRelativeUrl(url: string) {
     try {
       const parsed = new URL(url);
@@ -99,6 +141,7 @@ export default function AssistantPage() {
     const resolvedPrompt = prompt.trim();
     if (!resolvedPrompt) return;
 
+    setPrompt("");
     const userMessage = createMessage("user", resolvedPrompt);
     setMessages((current) => [...current, userMessage]);
     setIsPending(true);
@@ -111,11 +154,15 @@ export default function AssistantPage() {
         );
       }
 
-      const response = await backendApi.sendConversationMessage("web", webSessionId, {
-        message: resolvedPrompt,
-        displayName: state.profile.fullName,
-        rankingMode,
-      });
+      const response = await backendApi.sendConversationMessage(
+        "web",
+        webSessionId,
+        {
+          message: resolvedPrompt,
+          displayName: state.profile.fullName,
+          rankingMode,
+        },
+      );
 
       const assistantText = [
         response.reply.summary,
@@ -124,8 +171,11 @@ export default function AssistantPage() {
         .filter(Boolean)
         .join("\n\n");
 
-      setMessages((current) => [...current, createMessage("assistant", assistantText)]);
-      setPreview({
+      setMessages((current) => [
+        ...current,
+        createMessage("assistant", assistantText),
+      ]);
+        setPreview({
         source: "backend",
         query: response.searchSession.intent.query,
         summary: response.reply.summary,
@@ -138,9 +188,13 @@ export default function AssistantPage() {
         offers: getRankedOffers(response.searchSession).slice(0, 3),
       });
 
-      setPrompt("");
+      setHiddenMerchants([]);
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Unable to send your request right now.");
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Unable to send your request right now.",
+      );
       setMessages((current) => [
         ...current,
         createMessage(
@@ -166,7 +220,10 @@ export default function AssistantPage() {
         );
       }
 
-      const response = await backendApi.selectOffer(preview.searchSessionId, offerId);
+      const response = await backendApi.selectOffer(
+        preview.searchSessionId,
+        offerId,
+      );
       const checkoutUrl = response.webLinks?.checkout;
 
       if (checkoutUrl) {
@@ -176,7 +233,11 @@ export default function AssistantPage() {
 
       router.push(`/checkout?checkoutSession=${response.checkoutSession.id}`);
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Unable to continue with this offer right now.");
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Unable to continue with this offer right now.",
+      );
     } finally {
       setIsChoosingOffer(false);
     }
@@ -202,7 +263,9 @@ export default function AssistantPage() {
                 key={message.id}
                 className={`message ${message.role === "assistant" ? "assistant-message" : "user-message"}`}
               >
-                <span className="avatar">{message.role === "assistant" ? "AI" : "You"}</span>
+                <span className="avatar">
+                  {message.role === "assistant" ? "AI" : "You"}
+                </span>
                 <div>
                   <p>{message.text}</p>
                 </div>
@@ -216,19 +279,45 @@ export default function AssistantPage() {
                     <p className="assistant-kicker">Current shortlist</p>
                     <h3>{preview.query}</h3>
                   </div>
-                  <span className="tag">{rankingConfig[rankingMode].label}</span>
+                  <span className="tag">
+                    {rankingConfig[rankingMode].label}
+                  </span>
                 </div>
 
                 <p className="assistant-result-copy">
                   {preview.explanation ?? preview.summary}
                 </p>
 
-                {preview.offers.length ? (
+                {availableMerchants.length > 1 && (
+                  <div className="micro-preferences" style={{ marginBottom: 8 }}>
+                    <button
+                      className={`micro-chip${hiddenMerchants.length === 0 ? " is-active" : ""}`}
+                      type="button"
+                      onClick={() => setHiddenMerchants([])}
+                    >
+                      All Stores
+                    </button>
+                    {availableMerchants.map((merchant) => (
+                      <button
+                        key={merchant}
+                        className={`micro-chip${!hiddenMerchants.includes(merchant) ? " is-active" : ""}`}
+                        type="button"
+                        onClick={() => toggleMerchant(merchant)}
+                      >
+                        {merchant}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {filteredOffers.length ? (
                   <div className="assistant-result-list">
-                    {preview.offers.map((offer, index) => (
+                    {filteredOffers.map((offer, index) => (
                       <article className="assistant-result-item" key={offer.id}>
                         <div className="assistant-result-meta">
-                          <span className="assistant-result-rank">#{index + 1}</span>
+                          <span className="assistant-result-rank">
+                            #{index + 1}
+                          </span>
                           <div>
                             <strong>{offer.merchant}</strong>
                             <h4>{offer.title}</h4>
@@ -263,16 +352,23 @@ export default function AssistantPage() {
                   </div>
                 ) : (
                   <p className="assistant-result-copy">
-                    No confident matches yet. Try adding a clearer model, brand, size, or budget.
+                    No confident matches yet. Try adding a clearer model, brand,
+                    size, or budget.
                   </p>
                 )}
 
                 <div className="assistant-journey-actions">
-                  <Link className="button button-secondary" href={preview.resultsHref}>
+                  <Link
+                    className="button button-secondary"
+                    href={preview.resultsHref}
+                  >
                     Open full results
                   </Link>
                   {contextualActions?.checkoutHref ? (
-                    <Link className="button button-ghost" href={contextualActions.checkoutHref}>
+                    <Link
+                      className="button button-ghost"
+                      href={contextualActions.checkoutHref}
+                    >
                       Checkout top offer
                     </Link>
                   ) : null}
@@ -322,10 +418,20 @@ export default function AssistantPage() {
                 rows={3}
                 value={prompt}
                 onChange={(event) => setPrompt(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && !event.shiftKey) {
+                    event.preventDefault();
+                    event.currentTarget.form?.requestSubmit();
+                  }
+                }}
                 placeholder="Tell CartPilot what you want, your budget, preferred store, or delivery speed..."
               ></textarea>
-              <button className="button button-primary send-button" type="submit" disabled={isPending}>
-                {isPending ? "Searching" : "Send"}
+              <button
+                className="button button-primary send-button"
+                type="submit"
+                disabled={isPending}
+              >
+                {isPending ? `Searching ${formatElapsed(elapsed)}` : "Send"}
               </button>
             </div>
             {errorMessage ? <p className="panel-copy">{errorMessage}</p> : null}
