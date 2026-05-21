@@ -29,6 +29,7 @@ function ResultsPageContent() {
   const [backendRankingMode, setBackendRankingMode] = useState<RankingMode | null>(null);
   const [isLoading, setIsLoading] = useState(() => Boolean(searchSessionId && isBackendConfigured()));
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [hiddenMerchants, setHiddenMerchants] = useState<string[]>([]);
 
   useEffect(() => {
     if (!searchSessionId || !isBackendConfigured()) return;
@@ -78,6 +79,10 @@ function ResultsPageContent() {
         effectiveRankingMode,
       )
     : getOffersForIntent(activeSearch);
+
+  const availableMerchants = Array.from(new Set(offers.map((o) => o.merchant))).sort();
+
+  const filteredOffers = offers.filter((o) => !hiddenMerchants.includes(o.merchant));
 
   async function handleSelectOffer(offerId: string) {
     if (backendSession && isBackendConfigured()) {
@@ -186,11 +191,25 @@ function ResultsPageContent() {
               <h3>Supported merchants</h3>
             </div>
             <div className="filter-pills">
-              {offers.map((offer) => (
-                <span key={offer.id} className="chip active-chip">
-                  {offer.merchant}
-                </span>
-              ))}
+              {availableMerchants.map((merchant) => {
+                const isActive = !hiddenMerchants.includes(merchant);
+                return (
+                  <button
+                    key={merchant}
+                    className={`chip ${isActive ? "active-chip" : ""}`}
+                    type="button"
+                    onClick={() => {
+                      setHiddenMerchants((current) =>
+                        current.includes(merchant)
+                          ? current.filter((m) => m !== merchant)
+                          : [...current, merchant]
+                      );
+                    }}
+                  >
+                    {merchant}
+                  </button>
+                );
+              })}
             </div>
 
             <div className="section-heading subheading">
@@ -209,7 +228,7 @@ function ResultsPageContent() {
           </aside>
 
           <section className="results-panel">
-            {offers.map((offer, index) => (
+            {filteredOffers.map((offer, index) => (
               <OfferCard
                 key={offer.id}
                 offer={offer}
